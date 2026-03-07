@@ -370,25 +370,36 @@ export function generateTimetable(sem, divName, divStrength = 60) {
     const allUniqueSubs = getAllUniqueSubjects(); // Get normalized version of all subjects
 
     const findFaculties = (subjName, count = 1) => {
-        // Clean subject name for matching (remove ' Lab' suffix if present)
         const baseName = subjName.replace(' Lab', '');
 
-        // 1. Find the subject object in our database to get its shortCode and fullName
         const subObj = allUniqueSubs.find(s => s.name === baseName || s.shortCode === baseName);
         const nameToMatch = subObj ? subObj.name : baseName;
         const codeToMatch = subObj ? subObj.shortCode : baseName;
 
-        // 2. Match faculty who have either the name or shortCode assigned
-        const matches = allFaculty.filter(f =>
+        // 1. Get faculties explicitly assigned to this subject
+        let matches = allFaculty.filter(f =>
             (f.assignedSubjects || []).some(s => s === nameToMatch || s === codeToMatch)
         );
+        let codes = matches.map(m => m.code);
 
-        // Return codes for up to 'count' faculties
-        const codes = matches.map(m => m.code);
-        // If not enough faculty, pad with empty strings
-        while (codes.length < count) codes.push('');
+        // 2. If we need more faculties (e.g. 3 for concurrent lab batches), pick random unassigned ones
+        if (codes.length < count) {
+            const assignedSet = new Set(codes);
+            const others = allFaculty.filter(f => !assignedSet.has(f.code));
+            const shuffledOthers = shuffleArray(others);
 
-        return shuffleArray(codes).slice(0, count);
+            while (codes.length < count && shuffledOthers.length > 0) {
+                codes.push(shuffledOthers.pop().code);
+            }
+        }
+
+        // 3. Ensure we have EXACTLY 'count' unique faculties to avoid duplicate assignments at the same time
+        const finalCodes = Array.from(new Set(codes)).slice(0, count);
+
+        // Pad with 'TBD' only if we literally run out of faculty in the system (unlikely)
+        while (finalCodes.length < count) finalCodes.push('TBD');
+
+        return shuffleArray(finalCodes);
     };
 
     const findFaculty = (subjName) => findFaculties(subjName, 1)[0] || '';

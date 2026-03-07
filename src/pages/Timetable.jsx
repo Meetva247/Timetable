@@ -17,9 +17,12 @@ const SLOT_COLORS = [
 const sName = (s) => subjectName(s)
 
 export default function Timetable() {
-    const [sem, setSem] = useState(4)
-    const [divId, setDivId] = useState('')
-    const [ttData, setTtData] = useState(null)
+    const [sem, setSem] = useState(() => Number(sessionStorage.getItem('tt_draft_sem')) || 4)
+    const [divId, setDivId] = useState(() => sessionStorage.getItem('tt_draft_div') || '')
+    const [ttData, setTtData] = useState(() => {
+        const saved = sessionStorage.getItem('tt_draft_data')
+        return saved ? JSON.parse(saved) : null
+    })
     const [toast, setToast] = useState(null)
     const [editSlot, setEditSlot] = useState(null)
     const [slotForm, setSlotForm] = useState({ subject: '', type: 'theory' })
@@ -30,14 +33,33 @@ export default function Timetable() {
 
     const divs = getDivisionsBySem(sem)
 
+    const updateTtData = (data) => {
+        setTtData(data)
+        if (data) sessionStorage.setItem('tt_draft_data', JSON.stringify(data))
+        else sessionStorage.removeItem('tt_draft_data')
+    }
+
+    const handleSemChange = e => {
+        const s = Number(e.target.value)
+        setSem(s)
+        sessionStorage.setItem('tt_draft_sem', s)
+        setDivId('')
+        sessionStorage.removeItem('tt_draft_div')
+        updateTtData(null)
+    }
+
+    const handleDivChange = e => {
+        const d = e.target.value
+        setDivId(d)
+        sessionStorage.setItem('tt_draft_div', d)
+    }
+
     const generate = useCallback(() => {
         const d = divs.find(x => x.id === divId)
         if (!d) { showToast('Select a division first.', 'error'); return }
         const tt = generateTimetable(sem, d.name, d.strength)
-        setTtData(tt)
-        const key = `${sem}_${d.name}`
-        const all = getTimetables(); all[key] = tt; setTimetables(all)
-        showToast('Timetable generated!', 'success')
+        updateTtData(tt)
+        showToast('Timetable preview generated! Remember to save.', 'info')
     }, [sem, divId, divs])
 
     const loadSaved = useCallback(() => {
@@ -45,7 +67,7 @@ export default function Timetable() {
         if (!d) return
         const key = `${sem}_${d.name}`
         const tt = getTimetables()[key]
-        if (tt) { setTtData(tt); showToast('Loaded saved timetable.', 'info') }
+        if (tt) { updateTtData(tt); showToast('Loaded saved timetable.', 'info') }
         else showToast('No saved timetable. Click Generate.', 'error')
     }, [sem, divId, divs])
 
@@ -97,10 +119,17 @@ export default function Timetable() {
         const updated = { ...ttData, grid: { ...ttData.grid } }
         updated.grid[editSlot.day] = { ...updated.grid[editSlot.day] }
         updated.grid[editSlot.day][editSlot.period] = { subject: slotForm.subject, type: slotForm.type }
-        setTtData(updated)
+        updateTtData(updated)
+        setEditSlot(null); showToast('Slot updated in preview.', 'info')
+    }
+
+    const saveTimetable = () => {
+        if (!ttData) return
         const key = `${sem}_${ttData.divName}`
-        const all = getTimetables(); all[key] = updated; setTimetables(all)
-        setEditSlot(null); showToast('Slot updated.', 'success')
+        const all = getTimetables()
+        all[key] = ttData
+        setTimetables(all)
+        showToast('Timetable saved globally!', 'success')
     }
 
     const openEdit = (day, period) => {
@@ -140,20 +169,23 @@ export default function Timetable() {
             <div style={{ background: '#fff', border: '1px solid #dce1ec', borderRadius: 16, padding: '1.25rem 1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
                 <div style={{ flex: '1', minWidth: 160 }}>
                     <label style={{ fontSize: '.85rem', fontWeight: 600, color: '#4a4e6a', display: 'block', marginBottom: '.3rem' }}>Semester</label>
-                    <select style={inp} value={sem} onChange={e => { setSem(Number(e.target.value)); setDivId(''); setTtData(null) }}>
+                    <select style={inp} value={sem} onChange={handleSemChange}>
                         {[1, 2, 3, 4, 5, 6, 7, 8].map(s => <option key={s} value={s}>Semester {s}</option>)}
                     </select>
                 </div>
                 <div style={{ flex: '1', minWidth: 160 }}>
                     <label style={{ fontSize: '.85rem', fontWeight: 600, color: '#4a4e6a', display: 'block', marginBottom: '.3rem' }}>Division</label>
-                    <select style={inp} value={divId} onChange={e => setDivId(e.target.value)}>
+                    <select style={inp} value={divId} onChange={handleDivChange}>
                         <option value="">— Select Division —</option>
                         {divs.map(d => <option key={d.id} value={d.id}>{d.name} ({d.strength} students)</option>)}
                     </select>
                 </div>
-                <div style={{ display: 'flex', gap: '.5rem' }}>
+                <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
                     <button style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', padding: '.5rem 1.1rem', borderRadius: 10, fontSize: '.88rem', fontWeight: 600, cursor: 'pointer', border: '2px solid #4361ee', background: '#4361ee', color: '#fff', fontFamily: 'inherit' }} onClick={generate}>⚡ Generate</button>
                     <button style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', padding: '.5rem 1rem', borderRadius: 10, fontSize: '.88rem', fontWeight: 600, cursor: 'pointer', border: '2px solid #dce1ec', background: 'transparent', color: '#4a4e6a', fontFamily: 'inherit' }} onClick={loadSaved}>📂 Load Saved</button>
+                    {ttData && (
+                        <button style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', padding: '.5rem 1rem', borderRadius: 10, fontSize: '.88rem', fontWeight: 600, cursor: 'pointer', border: '2px solid #10b981', background: '#10b981', color: '#fff', fontFamily: 'inherit' }} onClick={saveTimetable}>💾 Save Timetable</button>
+                    )}
                 </div>
             </div>
 
@@ -265,15 +297,15 @@ export default function Timetable() {
                                                             {slot.batches ? (
                                                                 // Multi-batch Lab View
                                                                 <>
-                                                                    <div style={{ fontWeight: 700, borderBottom: `1px solid ${fg}20`, paddingBottom: '.2rem', marginBottom: '.1rem' }}>
+                                                                    <div style={{ fontWeight: 800, borderBottom: `1px solid ${fg}20`, paddingBottom: '.2rem', marginBottom: '.1rem' }}>
                                                                         {slot.subject} (LAB)
                                                                     </div>
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '.4rem' }}>
                                                                         {slot.batches.map(b => (
                                                                             <div key={b.name} style={{ textAlign: 'left', lineHeight: 1.2, paddingLeft: '.2rem', borderLeft: `2px solid ${fg}40` }}>
-                                                                                <div style={{ fontWeight: 600 }}>{b.faculty || 'TBD'}</div>
-                                                                                <div style={{ opacity: 0.8, fontSize: '.65rem' }}>{ttData.divName}-{b.name}</div>
-                                                                                <div style={{ opacity: 0.8, fontSize: '.65rem', fontWeight: 600 }}>{b.room}</div>
+                                                                                <div style={{ fontSize: '.68rem', fontWeight: 600 }}>{ttData.divName}-{b.name}</div>
+                                                                                <div style={{ fontSize: '.68rem', fontWeight: 600 }}>📍 {b.room}</div>
+                                                                                <div style={{ opacity: 0.8, fontSize: '.65rem', marginTop: '.1rem' }}>👨‍🏫 {b.faculty || 'TBD'}</div>
                                                                             </div>
                                                                         ))}
                                                                     </div>
@@ -281,12 +313,10 @@ export default function Timetable() {
                                                             ) : (
                                                                 // Theory View
                                                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '.25rem' }}>
-                                                                    <div style={{ fontWeight: 700 }}>{slot.subject || <span style={{ color: '#8a8fa8', fontStyle: 'italic' }}>— empty —</span>}</div>
-                                                                    {slot.faculty && <div style={{ fontWeight: 600 }}>{slot.faculty}</div>}
-                                                                    <div style={{ display: 'flex', gap: '.3rem', flexWrap: 'wrap', justifyContent: 'center', opacity: 0.8, fontSize: '.65rem' }}>
-                                                                        {slot.isWholeClass && <span>{ttData.divName}</span>}
-                                                                        {slot.room && <span>{slot.room}</span>}
-                                                                    </div>
+                                                                    <div style={{ fontWeight: 800 }}>{slot.subject || <span style={{ color: '#8a8fa8', fontStyle: 'italic' }}>— empty —</span>}</div>
+                                                                    <div style={{ fontSize: '.68rem', fontWeight: 600 }}>{ttData.divName}</div>
+                                                                    {slot.room && <div style={{ fontSize: '.68rem', fontWeight: 600 }}>📍 {slot.room}</div>}
+                                                                    {slot.faculty && <div style={{ fontSize: '.65rem', marginTop: '.1rem', opacity: 0.8 }}>👨‍🏫 {slot.faculty}</div>}
                                                                 </div>
                                                             )}
                                                         </div>
