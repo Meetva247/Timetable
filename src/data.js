@@ -77,10 +77,10 @@ const DEFAULTS = {
         3: { core: ['Mathematics-III', 'Database Management System', 'Operating Systems', 'Object Oriented Programming', 'Discrete Mathematics', 'DBMS Lab', 'OOP Lab'], electives: [] },
         4: {
             core: [
-                { code: '2BS4101', shortCode: 'MATHS', name: 'Mathematics', credits: 4, hasLab: false, labOnly: false },
+                { code: '2BS4101', shortCode: 'Maths-||', name: 'Mathematics-||', credits: 4, hasLab: false, labOnly: false },
                 { code: '2CEIT401', shortCode: 'OS', name: 'Operating Systems', credits: 4, hasLab: true, labOnly: false },
                 { code: '2CEIT402', shortCode: 'DAA', name: 'Design and Analysis of Algorithms', credits: 4, hasLab: true, labOnly: false },
-                { code: '2CEIT404', shortCode: 'P-PY', name: 'Programming with Python', credits: 4, hasLab: true, labOnly: false },
+                { code: '2CEIT404', shortCode: 'PPY', name: 'Programming with Python', credits: 4, hasLab: true, labOnly: false },
                 { code: '2CEIT405', shortCode: 'NOSQL', name: 'NoSQL Databases', credits: 2, hasLab: true, labOnly: true },
                 { code: '2CEIT406', shortCode: 'SEPM', name: 'Software Engineering & Project Mgmt', credits: 3, hasLab: true, labOnly: false },
                 { code: '2CEIT407', shortCode: 'DT', name: 'Design Thinking', credits: 2, hasLab: true, labOnly: true },
