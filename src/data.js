@@ -221,6 +221,43 @@ export const getAllUniqueSubjects = () => {
     return Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name));
 };
 
+export const updateSubjectCredits = (id, newCredits) => {
+    const all = getSubjects();
+    const updated = { ...all };
+    const credits = Number(newCredits) || 0;
+
+    Object.keys(updated).forEach(sem => {
+        const s = updated[sem];
+        if (s.core) {
+            s.core = s.core.map(subj => {
+                if (typeof subj === 'object' && subj !== null) {
+                    if (subj.code === id || subj.name === id) return { ...subj, credits };
+                } else if (subj === id) {
+                    // Convert string subject to object to support credits
+                    return { name: subj, shortCode: subj, code: '', credits };
+                }
+                return subj;
+            });
+        }
+        if (s.electives) {
+            s.electives = s.electives.map(group => ({
+                ...group,
+                options: (group.options || []).map(subj => {
+                    if (typeof subj === 'object' && subj !== null) {
+                        if (subj.code === id || subj.name === id) return { ...subj, credits };
+                    } else if (subj === id) {
+                        return { name: subj, shortCode: subj, code: '', credits };
+                    }
+                    return subj;
+                })
+            }));
+        }
+    });
+
+    setSubjects(updated);
+    return true;
+};
+
 
 // Subject helpers — handle both plain string ("OS") and object ({code, shortCode, name})
 export const subjectName = (s) => (typeof s === 'object' && s !== null) ? s.name : s;

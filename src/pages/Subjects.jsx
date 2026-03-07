@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAllUniqueSubjects, getSubjectTimetable, PERIODS, DAYS, updateTimetableSlotGlobal } from '../data'
+import { getAllUniqueSubjects, getSubjectTimetable, PERIODS, DAYS, updateTimetableSlotGlobal, updateSubjectCredits } from '../data'
 import Modal from '../components/Modal'
 import Toast from '../components/Toast'
 
@@ -14,6 +14,7 @@ export default function Subjects() {
     const [search, setSearch] = useState('')
     const [schedModal, setSched] = useState({ open: false, subject: null, data: null })
     const [editSlot, setEditSlot] = useState(null)
+    const [editCreditsModal, setEditCreditsModal] = useState({ open: false, subject: null, value: 0 })
     const [toast, setToast] = useState(null)
     const showToast = (msg, type = 'info') => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800) }
 
@@ -50,6 +51,25 @@ export default function Subjects() {
             if (schedModal.subject) viewSchedule(schedModal.subject)
         } else {
             showToast('Failed to update slot.', 'error')
+        }
+    }
+
+    const openEditCredits = s => {
+        setEditCreditsModal({ open: true, subject: s, value: s.credits || 0 })
+    }
+
+    const handleUpdateCredits = e => {
+        e.preventDefault()
+        const { subject, value } = editCreditsModal
+        if (!subject) return
+
+        const id = subject.code || subject.name
+        const success = updateSubjectCredits(id, value)
+
+        if (success) {
+            showToast(`Updated credits for ${subject.name}`, 'success')
+            setEditCreditsModal({ open: false, subject: null, value: 0 })
+            load() // Refresh list
         }
     }
 
@@ -97,7 +117,10 @@ export default function Subjects() {
                                     <span style={{ fontWeight: 700, color: 'var(--text)' }}>{s.credits || 0}</span>
                                 </td>
                                 <td style={{ padding: '.8rem 1rem' }}>
-                                    <button style={btn('transparent', 'var(--primary)', 'var(--primary)')} onClick={() => viewSchedule(s)}>📅 View Schedule</button>
+                                    <div style={{ display: 'flex', gap: '.4rem' }}>
+                                        <button style={btn('transparent', 'var(--primary)', 'var(--primary)')} onClick={() => viewSchedule(s)}>📅 View Schedule</button>
+                                        <button style={btn('var(--surface2)', 'var(--text-2)', 'var(--border)')} onClick={() => openEditCredits(s)}>✏️ Edit Credits</button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
@@ -206,6 +229,23 @@ export default function Subjects() {
                         </div>
                     </form>
                 )}
+            </Modal>
+
+            {/* Edit Credits Modal */}
+            <Modal open={editCreditsModal.open} title={`Edit Credits — ${editCreditsModal.subject?.name}`} onClose={() => setEditCreditsModal({ open: false, subject: null, value: 0 })} maxWidth={360}>
+                <form onSubmit={handleUpdateCredits}>
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <label style={{ display: 'block', fontSize: '.85rem', fontWeight: 600, marginBottom: '.5rem', color: 'var(--text-2)' }}>Subject Credits</label>
+                        <input type="number" step="0.5" style={inp} required value={editCreditsModal.value}
+                            onChange={e => setEditCreditsModal(m => ({ ...m, value: e.target.value }))}
+                            placeholder="e.g. 4.0" />
+                        <p style={{ fontSize: '.75rem', color: 'var(--text-3)', marginTop: '.5rem' }}>This updates the credits for this subject across all semesters.</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '.75rem', justifyContent: 'flex-end' }}>
+                        <button type="button" style={btn('transparent', 'var(--text-2)', 'var(--border)')} onClick={() => setEditCreditsModal({ open: false, subject: null, value: 0 })}>Cancel</button>
+                        <button type="submit" style={btn('var(--primary)', '#fff', 'var(--primary)')}>💾 Update Credits</button>
+                    </div>
+                </form>
             </Modal>
 
             {toast && <Toast msg={toast.msg} type={toast.type} />}
