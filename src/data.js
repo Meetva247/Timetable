@@ -221,6 +221,26 @@ export const getAllUniqueSubjects = () => {
     return Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name));
 };
 
+export const getGroupedSubjects = () => {
+    const all = getSubjects();
+    const grouped = {};
+    const norm = (s) => (typeof s === 'object' && s !== null) ? s : { name: s, shortCode: s, code: '', credits: 0 };
+
+    Object.keys(all).forEach(sem => {
+        const semSubjects = all[sem];
+        const flat = [
+            ...(semSubjects.core || []),
+            ...(semSubjects.electives || []).flatMap(g => g.options || [])
+        ].map(norm);
+
+        if (flat.length > 0) {
+            grouped[sem] = flat.sort((a, b) => a.name.localeCompare(b.name));
+        }
+    });
+
+    return grouped;
+};
+
 export const updateSubjectCredits = (id, newCredits) => {
     const all = getSubjects();
     const updated = { ...all };
@@ -258,6 +278,49 @@ export const updateSubjectCredits = (id, newCredits) => {
     return true;
 };
 
+
+export const updateSubjectInSemester = (sem, id, newCredits) => {
+    const all = getSubjects();
+    const updated = { ...all };
+    const semData = updated[sem];
+    if (!semData) return false;
+
+    const credits = Number(newCredits) || 0;
+    let found = false;
+
+    if (semData.core) {
+        semData.core = semData.core.map(subj => {
+            if (typeof subj === 'object' && subj !== null) {
+                if (subj.code === id || subj.name === id) { found = true; return { ...subj, credits }; }
+            } else if (subj === id) {
+                found = true;
+                return { name: subj, shortCode: subj, code: '', credits };
+            }
+            return subj;
+        });
+    }
+
+    if (semData.electives) {
+        semData.electives = semData.electives.map(group => ({
+            ...group,
+            options: (group.options || []).map(subj => {
+                if (typeof subj === 'object' && subj !== null) {
+                    if (subj.code === id || subj.name === id) { found = true; return { ...subj, credits }; }
+                } else if (subj === id) {
+                    found = true;
+                    return { name: subj, shortCode: subj, code: '', credits };
+                }
+                return subj;
+            })
+        }));
+    }
+
+    if (found) {
+        setSubjects(updated);
+        return true;
+    }
+    return false;
+};
 
 // Subject helpers — handle both plain string ("OS") and object ({code, shortCode, name})
 export const subjectName = (s) => (typeof s === 'object' && s !== null) ? s.name : s;

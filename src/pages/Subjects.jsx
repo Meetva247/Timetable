@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAllUniqueSubjects, getSubjectTimetable, PERIODS, DAYS, updateTimetableSlotGlobal, updateSubjectCredits } from '../data'
+import { getGroupedSubjects, getSubjectTimetable, PERIODS, DAYS, updateTimetableSlotGlobal, updateSubjectInSemester, getSubjectsBySem } from '../data'
 import Modal from '../components/Modal'
 import Toast from '../components/Toast'
 
@@ -10,25 +10,35 @@ const btn = (bg, color, border) => ({
 })
 
 export default function Subjects() {
-    const [subjects, setSubjects] = useState([])
+    const [subjects, setSubjects] = useState({}) // Grouped by sem
     const [search, setSearch] = useState('')
     const [schedModal, setSched] = useState({ open: false, subject: null, data: null })
     const [editSlot, setEditSlot] = useState(null)
-    const [editCreditsModal, setEditCreditsModal] = useState({ open: false, subject: null, value: 0 })
+    const [editCreditsModal, setEditCreditsModal] = useState({ open: false, subject: null, sem: null, value: 0 })
     const [toast, setToast] = useState(null)
-    const showToast = (msg, type = 'info') => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800) }
+
+    const showToast = (msg, type = 'info') => {
+        setToast({ msg, type });
+        setTimeout(() => setToast(null), 2800)
+    }
 
     const load = useCallback(() => {
-        setSubjects(getAllUniqueSubjects())
+        setSubjects(getGroupedSubjects())
     }, [])
 
     useEffect(() => load(), [load])
 
-    const filtered = subjects.filter(s =>
+    const filter = (list) => list.filter(s =>
         s.name.toLowerCase().includes(search.toLowerCase()) ||
         s.shortCode.toLowerCase().includes(search.toLowerCase()) ||
         s.code.toLowerCase().includes(search.toLowerCase())
     )
+
+    const filtered = Object.keys(subjects).reduce((acc, sem) => {
+        const list = filter(subjects[sem])
+        if (list.length > 0) acc[sem] = list
+        return acc
+    }, {})
 
     const viewSchedule = s => {
         const id = s.code || s.name
@@ -54,21 +64,21 @@ export default function Subjects() {
         }
     }
 
-    const openEditCredits = s => {
-        setEditCreditsModal({ open: true, subject: s, value: s.credits || 0 })
+    const openEditCredits = (s, sem) => {
+        setEditCreditsModal({ open: true, subject: s, sem, value: s.credits || 0 })
     }
 
     const handleUpdateCredits = e => {
         e.preventDefault()
-        const { subject, value } = editCreditsModal
-        if (!subject) return
+        const { subject, sem, value } = editCreditsModal
+        if (!subject || !sem) return
 
         const id = subject.code || subject.name
-        const success = updateSubjectCredits(id, value)
+        const success = updateSubjectInSemester(sem, id, value)
 
         if (success) {
-            showToast(`Updated credits for ${subject.name}`, 'success')
-            setEditCreditsModal({ open: false, subject: null, value: 0 })
+            showToast(`Updated credits for ${subject.name} in Semester ${sem}`, 'success')
+            setEditCreditsModal({ open: false, subject: null, sem: null, value: 0 })
             load() // Refresh list
         }
     }
@@ -92,40 +102,55 @@ export default function Subjects() {
                 </div>
             </div>
 
-            <div className="table-container" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                        <tr style={{ background: 'var(--surface2)', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>
-                            <th style={{ padding: '1rem', fontSize: '.75rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Subject Name</th>
-                            <th style={{ padding: '1rem', fontSize: '.75rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Short Code</th>
-                            <th style={{ padding: '1rem', fontSize: '.75rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Admin Code</th>
-                            <th style={{ padding: '1rem', fontSize: '.75rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Credits</th>
-                            <th style={{ padding: '1rem', fontSize: '.75rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filtered.length === 0 ? (
-                            <tr><td colSpan="4" style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-3)' }}>No subjects found matching your search.</td></tr>
-                        ) : filtered.map(s => (
-                            <tr key={s.code || s.name} style={{ borderBottom: '1px solid var(--border)', transition: 'background .15s' }}>
-                                <td style={{ padding: '.8rem 1rem', fontWeight: 600 }}>{s.name}</td>
-                                <td style={{ padding: '.8rem 1rem' }}>
-                                    <span style={{ background: 'var(--primary-l)', color: 'var(--primary)', padding: '.2rem .6rem', borderRadius: 8, fontSize: '.78rem', fontWeight: 700 }}>{s.shortCode}</span>
-                                </td>
-                                <td style={{ padding: '.8rem 1rem', color: 'var(--text-2)', fontSize: '.85rem' }}>{s.code || '—'}</td>
-                                <td style={{ padding: '.8rem 1rem' }}>
-                                    <span style={{ fontWeight: 700, color: 'var(--text)' }}>{s.credits || 0}</span>
-                                </td>
-                                <td style={{ padding: '.8rem 1rem' }}>
-                                    <div style={{ display: 'flex', gap: '.4rem' }}>
-                                        <button style={btn('transparent', 'var(--primary)', 'var(--primary)')} onClick={() => viewSchedule(s)}>📅 View Schedule</button>
-                                        <button style={btn('var(--surface2)', 'var(--text-2)', 'var(--border)')} onClick={() => openEditCredits(s)}>✏️ Edit Credits</button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+            <div className="semesters-grid">
+                {Object.keys(filtered).sort((a, b) => Number(a) - Number(b)).map(sem => (
+                    <div key={sem} style={{ marginBottom: '3rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.2rem' }}>
+                            <div style={{ background: 'var(--primary)', color: '#fff', width: 40, height: 40, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.2rem' }}>{sem}</div>
+                            <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>Semester {sem}</h2>
+                        </div>
+
+                        <div className="table-container" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16 }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ background: 'var(--surface2)', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>
+                                        <th style={{ padding: '1rem', fontSize: '.75rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Subject Name</th>
+                                        <th style={{ padding: '1rem', fontSize: '.75rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Short Code</th>
+                                        <th style={{ padding: '1rem', fontSize: '.75rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Admin Code</th>
+                                        <th style={{ padding: '1rem', fontSize: '.75rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Credits</th>
+                                        <th style={{ padding: '1rem', fontSize: '.75rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase' }}>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filtered[sem].map(s => (
+                                        <tr key={s.code || s.name} style={{ borderBottom: '1px solid var(--border)', transition: 'background .15s' }}>
+                                            <td style={{ padding: '.8rem 1rem', fontWeight: 600 }}>{s.name}</td>
+                                            <td style={{ padding: '.8rem 1rem' }}>
+                                                <span style={{ background: 'var(--primary-l)', color: 'var(--primary)', padding: '.2rem .6rem', borderRadius: 8, fontSize: '.78rem', fontWeight: 700 }}>{s.shortCode}</span>
+                                            </td>
+                                            <td style={{ padding: '.8rem 1rem', color: 'var(--text-2)', fontSize: '.85rem' }}>{s.code || '—'}</td>
+                                            <td style={{ padding: '.8rem 1rem' }}>
+                                                <span style={{ fontWeight: 700, color: 'var(--text)' }}>{s.credits || 0}</span>
+                                            </td>
+                                            <td style={{ padding: '.8rem 1rem' }}>
+                                                <div style={{ display: 'flex', gap: '.4rem' }}>
+                                                    <button style={btn('transparent', 'var(--primary)', 'var(--primary)')} onClick={() => viewSchedule(s)}>📅 View Schedule</button>
+                                                    <button style={btn('var(--surface2)', 'var(--text-2)', 'var(--border)')} onClick={() => openEditCredits(s, sem)}>✏️ Edit Credits</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ))}
+
+                {Object.keys(filtered).length === 0 && (
+                    <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-3)', background: 'var(--surface)', borderRadius: 16, border: '1px dashed var(--border)' }}>
+                        No semesters or subjects found matching your search.
+                    </div>
+                )}
             </div>
 
             {/* Schedule Modal */}
@@ -232,18 +257,22 @@ export default function Subjects() {
             </Modal>
 
             {/* Edit Credits Modal */}
-            <Modal open={editCreditsModal.open} title={`Edit Credits — ${editCreditsModal.subject?.name}`} onClose={() => setEditCreditsModal({ open: false, subject: null, value: 0 })} maxWidth={360}>
+            <Modal open={editCreditsModal.open} title={`Edit Credits — Semester ${editCreditsModal.sem}`} onClose={() => setEditCreditsModal({ open: false, subject: null, sem: null, value: 0 })} maxWidth={360}>
                 <form onSubmit={handleUpdateCredits}>
+                    <div style={{ marginBottom: '1.5rem', background: 'var(--surface2)', padding: '.8rem', borderRadius: 12 }}>
+                        <div style={{ fontWeight: 700, fontSize: '.95rem' }}>{editCreditsModal.subject?.name}</div>
+                        <div style={{ fontSize: '.8rem', color: 'var(--text-3)', marginTop: '.2rem' }}>{editCreditsModal.subject?.code || editCreditsModal.subject?.shortCode}</div>
+                    </div>
                     <div style={{ marginBottom: '1.5rem' }}>
                         <label style={{ display: 'block', fontSize: '.85rem', fontWeight: 600, marginBottom: '.5rem', color: 'var(--text-2)' }}>Subject Credits</label>
                         <input type="number" step="0.5" style={inp} required value={editCreditsModal.value}
                             onChange={e => setEditCreditsModal(m => ({ ...m, value: e.target.value }))}
                             placeholder="e.g. 4.0" />
-                        <p style={{ fontSize: '.75rem', color: 'var(--text-3)', marginTop: '.5rem' }}>This updates the credits for this subject across all semesters.</p>
+                        <p style={{ fontSize: '.75rem', color: 'var(--warning)', marginTop: '.6rem' }}>⚠️ This update will <strong>only affect Semester {editCreditsModal.sem}</strong>. Changes will not apply to other semesters.</p>
                     </div>
                     <div style={{ display: 'flex', gap: '.75rem', justifyContent: 'flex-end' }}>
-                        <button type="button" style={btn('transparent', 'var(--text-2)', 'var(--border)')} onClick={() => setEditCreditsModal({ open: false, subject: null, value: 0 })}>Cancel</button>
-                        <button type="submit" style={btn('var(--primary)', '#fff', 'var(--primary)')}>💾 Update Credits</button>
+                        <button type="button" style={btn('transparent', 'var(--text-2)', 'var(--border)')} onClick={() => setEditCreditsModal({ open: false, subject: null, sem: null, value: 0 })}>Cancel</button>
+                        <button type="submit" style={btn('var(--primary)', '#fff', 'var(--primary)')}>💾 Save for Sem {editCreditsModal.sem}</button>
                     </div>
                 </form>
             </Modal>
