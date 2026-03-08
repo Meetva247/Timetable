@@ -9,10 +9,21 @@ const KEYS = {
     allocation: 'tt_allocation',
     timetables: 'tt_timetables',
     faculty: 'tt_faculty',
+    departments: 'tt_departments',
 };
 
 
 const DEFAULTS = {
+    departments: [
+        'Computer Engineering',
+        'Information Technology',
+        'Electronics & Communication',
+        'Mechanical Engineering',
+        'Civil Engineering',
+        'Electrical Engineering',
+        'Business Administration',
+        'Science & Humanities'
+    ],
     classrooms: [
         // Classrooms (lectures) — edit capacity as needed
         { id: 'r1', name: '1NB210', capacity: 120, type: 'classroom' },
@@ -72,9 +83,39 @@ const DEFAULTS = {
         { id: 'd8b', semester: 8, name: '8CE-B', strength: 52 },
     ],
     subjects: {
-        1: { core: ['Mathematics-I', 'Engineering Physics', 'Programming (C)', 'English Communication', 'Workshop Practice', 'Physics Lab', 'Programming Lab'], electives: [] },
-        2: { core: ['Mathematics-II', 'Engineering Chemistry', 'Data Structures', 'Digital Logic Design', 'Environmental Science', 'Chemistry Lab', 'DS Lab'], electives: [] },
-        3: { core: ['Mathematics-III', 'Database Management System', 'Operating Systems', 'Object Oriented Programming', 'Discrete Mathematics', 'DBMS Lab', 'OOP Lab'], electives: [] },
+        1: {
+            core: [
+                { name: 'Mathematics-I', shortCode: 'MATHS-I', code: '', credits: 4, hasLab: false, labOnly: false },
+                { name: 'Engineering Physics', shortCode: 'PHYSICS', code: '', credits: 4, hasLab: true, labOnly: false },
+                { name: 'Programming (C)', shortCode: 'PROG-C', code: '', credits: 4, hasLab: true, labOnly: false },
+                { name: 'English Communication', shortCode: 'ENG', code: '', credits: 2, hasLab: false, labOnly: false },
+                { name: 'Workshop Practice', shortCode: 'WS', code: '', credits: 2, hasLab: true, labOnly: true },
+                { name: 'Physics Lab', shortCode: 'PHY-LAB', code: '', credits: 1, hasLab: true, labOnly: true },
+                { name: 'Programming Lab', shortCode: 'PROG-LAB', code: '', credits: 1, hasLab: true, labOnly: true },
+            ], electives: []
+        },
+        2: {
+            core: [
+                { name: 'Mathematics-II', shortCode: 'MATHS-II', code: '', credits: 4, hasLab: false, labOnly: false },
+                { name: 'Engineering Chemistry', shortCode: 'CHEM', code: '', credits: 4, hasLab: true, labOnly: false },
+                { name: 'Data Structures', shortCode: 'DS', code: '', credits: 4, hasLab: true, labOnly: false },
+                { name: 'Digital Logic Design', shortCode: 'DLD', code: '', credits: 4, hasLab: true, labOnly: false },
+                { name: 'Environmental Science', shortCode: 'ES', code: '', credits: 2, hasLab: false, labOnly: false },
+                { name: 'Chemistry Lab', shortCode: 'CHEM-LAB', code: '', credits: 1, hasLab: true, labOnly: true },
+                { name: 'DS Lab', shortCode: 'DS-LAB', code: '', credits: 1, hasLab: true, labOnly: true },
+            ], electives: []
+        },
+        3: {
+            core: [
+                { name: 'Mathematics-III', shortCode: 'MATHS-III', code: '', credits: 4, hasLab: false, labOnly: false },
+                { name: 'Database Management System', shortCode: 'DBMS', code: '', credits: 4, hasLab: true, labOnly: false },
+                { name: 'Operating Systems', shortCode: 'OS', code: '', credits: 4, hasLab: true, labOnly: false },
+                { name: 'Object Oriented Programming', shortCode: 'OOP', code: '', credits: 4, hasLab: true, labOnly: false },
+                { name: 'Discrete Mathematics', shortCode: 'DM', code: '', credits: 4, hasLab: false, labOnly: false },
+                { name: 'DBMS Lab', shortCode: 'DBMS-LAB', code: '', credits: 1, hasLab: true, labOnly: true },
+                { name: 'OOP Lab', shortCode: 'OOP-LAB', code: '', credits: 1, hasLab: true, labOnly: true },
+            ], electives: []
+        },
         4: {
             core: [
                 { code: '2BS4101', shortCode: 'Maths-||', name: 'Mathematics-||', credits: 4, hasLab: false, labOnly: false },
@@ -185,6 +226,7 @@ function set(key, value) {
 }
 
 export function init() {
+    if (!get(KEYS.departments)) set(KEYS.departments, DEFAULTS.departments);
     if (!get(KEYS.classrooms)) set(KEYS.classrooms, DEFAULTS.classrooms);
     if (!get(KEYS.divisions)) set(KEYS.divisions, DEFAULTS.divisions);
     if (!get(KEYS.subjects)) set(KEYS.subjects, DEFAULTS.subjects);
@@ -192,6 +234,10 @@ export function init() {
 }
 
 export function uid() { return 'id_' + Math.random().toString(36).substr(2, 9); }
+
+// Departments
+export const getDepartments = () => get(KEYS.departments) ?? [];
+export const setDepartments = (d) => set(KEYS.departments, d);
 
 // Classrooms
 export const getClassrooms = () => get(KEYS.classrooms) ?? [];
@@ -209,7 +255,14 @@ export const getSubjectsBySem = (s) => { const sb = getSubjects(); return sb[s] 
 export const getAllUniqueSubjects = () => {
     const all = getSubjects();
     const unique = new Map();
-    const norm = (s) => (typeof s === 'object' && s !== null) ? s : { name: s, shortCode: s, code: '', credits: 0 };
+    const depts = getDepartments()
+    const norm = (s) => {
+        if (typeof s === 'object' && s !== null) return s;
+        const name = String(s);
+        const lower = name.toLowerCase();
+        const isLab = lower.includes('lab') || lower.includes('workshop') || lower.includes('practice');
+        return { name, shortCode: name, code: '', credits: 0, department: depts[0] || '', hasLab: isLab, labOnly: isLab };
+    };
 
     Object.values(all).forEach(sem => {
         [...(sem.core || []), ...(sem.electives || []).flatMap(g => g.options || [])].forEach(s => {
@@ -223,8 +276,15 @@ export const getAllUniqueSubjects = () => {
 
 export const getGroupedSubjects = () => {
     const all = getSubjects();
+    const depts = getDepartments()
     const grouped = {};
-    const norm = (s) => (typeof s === 'object' && s !== null) ? s : { name: s, shortCode: s, code: '', credits: 0 };
+    const norm = (s) => {
+        if (typeof s === 'object' && s !== null) return s;
+        const name = String(s);
+        const lower = name.toLowerCase();
+        const isLab = lower.includes('lab') || lower.includes('workshop') || lower.includes('practice');
+        return { name, shortCode: name, code: '', credits: 0, department: depts[0] || '', hasLab: isLab, labOnly: isLab };
+    };
 
     Object.keys(all).forEach(sem => {
         const semSubjects = all[sem];
@@ -279,22 +339,25 @@ export const updateSubjectCredits = (id, newCredits) => {
 };
 
 
-export const updateSubjectInSemester = (sem, id, newCredits) => {
+export const updateSubjectDetails = (sem, id, details) => {
     const all = getSubjects();
     const updated = { ...all };
     const semData = updated[sem];
     if (!semData) return false;
 
-    const credits = Number(newCredits) || 0;
     let found = false;
+
+    const applyDetails = (oldObj) => {
+        found = true;
+        return { ...oldObj, ...details };
+    };
 
     if (semData.core) {
         semData.core = semData.core.map(subj => {
             if (typeof subj === 'object' && subj !== null) {
-                if (subj.code === id || subj.name === id) { found = true; return { ...subj, credits }; }
+                if (subj.code === id || subj.name === id) return applyDetails(subj);
             } else if (subj === id) {
-                found = true;
-                return { name: subj, shortCode: subj, code: '', credits };
+                return applyDetails({ name: subj, shortCode: subj, code: '', credits: 0, hasLab: false, labOnly: false, department: '' });
             }
             return subj;
         });
@@ -305,10 +368,9 @@ export const updateSubjectInSemester = (sem, id, newCredits) => {
             ...group,
             options: (group.options || []).map(subj => {
                 if (typeof subj === 'object' && subj !== null) {
-                    if (subj.code === id || subj.name === id) { found = true; return { ...subj, credits }; }
+                    if (subj.code === id || subj.name === id) return applyDetails(subj);
                 } else if (subj === id) {
-                    found = true;
-                    return { name: subj, shortCode: subj, code: '', credits };
+                    return applyDetails({ name: subj, shortCode: subj, code: '', credits: 0, hasLab: false, labOnly: false, department: '' });
                 }
                 return subj;
             })
@@ -429,8 +491,15 @@ export function generateTimetable(sem, divName, divStrength = 60, shift = 'eveni
     const LAB_BLOCKS = shift === 'morning' ? MORNING_LAB_BLOCKS : EVENING_LAB_BLOCKS;
     const ALL_SLOTS = shift === 'morning' ? MORNING_ALL_SLOTS : EVENING_ALL_SLOTS;
 
-    // Normalize subject entries
-    const norm = (s) => (typeof s === 'object' && s !== null) ? s : { name: s, hasLab: false, labOnly: false };
+    // Normalize subject entries - with automatic lab detection
+    const norm = (s) => {
+        if (typeof s === 'object' && s !== null) return s;
+        const name = String(s);
+        const lower = name.toLowerCase();
+        const isLab = lower.includes('lab') || lower.includes('workshop') || lower.includes('practice');
+        // If it's a lab, we assume it's labOnly for generation purposes if it's just a string like "Physics Lab"
+        return { name, hasLab: isLab, labOnly: isLab };
+    };
     const subjects = core.map(norm);
     if (electives.length) {
         const firstOpt = electives[0]?.options?.[0];
